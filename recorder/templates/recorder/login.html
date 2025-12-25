@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Karaoke Login</title>
+    <style>
+        body { 
+            font-family: 'Poppins', sans-serif; 
+            background: radial-gradient(circle at top, #335d8c 0%, #0b1b30 55%, #020712 100%);
+            height: 100vh; 
+            display: flex; 
+            align-items: center; 
+            justify-content: center; 
+            margin: 0;
+        }
+        .login-box { 
+            background: rgba(5,10,25,0.9); 
+            padding: 40px; 
+            border-radius: 20px; 
+            border: 1px solid rgba(255,255,255,0.2);
+            width: 100%; 
+            max-width: 400px; 
+            text-align: center;
+        }
+        .logo { width: 60px; height: 60px; border-radius: 50%; border: 2px solid rgba(255,255,255,0.4); margin-bottom: 20px; }
+        h2 { color: white; margin-bottom: 10px; }
+        input { 
+            width: 100%; padding: 15px; margin: 10px 0; background: rgba(5,10,25,0.7); 
+            border: 1px solid rgba(255,255,255,0.2); border-radius: 10px; color: white; 
+            font-size: 16px; box-sizing: border-box;
+        }
+        input:focus { outline: none; border-color: rgba(255,255,255,0.6); }
+        .btn { 
+            width: 100%; padding: 15px; background: linear-gradient(135deg, #ff0066, #ff66cc); 
+            border: none; border-radius: 10px; color: white; font-size: 16px; 
+            font-weight: 600; cursor: pointer; margin-top: 20px;
+        }
+        .btn:hover { opacity: 0.9; }
+        .error { color: #ff6666; margin-top: 10px; }
+        .credentials { background: rgba(5,10,25,0.8); padding: 15px; border-radius: 10px; margin-top: 20px; font-size: 14px; }
+    </style>
+</head>
+<body>
+    <div class="login-box">
+        <img src="/media/logo/branks3_logo.png" alt="Logo" class="logo" onerror="this.src='/static/default_logo.png'">
+        <h2>𝄞 Karaoke Reels</h2>
+        <p style="color: #ccc; margin-bottom: 30px;">Login to continue</p>
+        
+        <form method="post">
+            {% csrf_token %}
+            <input type="text" name="username" placeholder="admin / user1 / user2" required>
+            <input type="password" name="password" placeholder="Enter password" required>
+            <button type="submit" class="btn">Login</button>
+        </form>
+        
+        {% if error %}
+        <div class="error">{{ error }}</div>
+        {% endif %}
+        
+        <div class="credentials">
+            <strong>Default Credentials:</strong><br>
+            admin / admin123<br>
+            user1 / user123<br>
+            user2 / user123
+        </div>
+    </div>
+</body>
+</html>

@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Admin Dashboard</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        body { font-family: Arial, sans-serif; background: #111; color: white; margin: 0; padding: 20px; }
+        .container { max-width: 1200px; margin: 0 auto; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; }
+        .upload-form { background: #222; padding: 20px; border-radius: 10px; margin-bottom: 20px; }
+        .song-list { background: #222; padding: 20px; border-radius: 10px; }
+        .song-item { display: flex; justify-content: space-between; align-items: center; padding: 15px; border-bottom: 1px solid #333; }
+        .btn { background: linear-gradient(135deg, #ff0066, #ff66cc); color: white; border: none; padding: 8px 16px; border-radius: 20px; cursor: pointer; text-decoration: none; display: inline-block; }
+        .btn:hover { opacity: 0.9; }
+        .btn.active { background: linear-gradient(135deg, #00ff88, #66ffcc); }
+        .share-btn.shared { background: linear-gradient(135deg, #00ff88, #66ffcc); }
+        .share-url { word-break: break-all; font-size: 12px; margin-top: 5px; }
+        input[type="text"], input[type="file"] { 
+            flex: 1; background: #333; color: white; border: 1px solid #555; 
+            padding: 12px; border-radius: 5px; min-height: 50px; 
+        }
+        input[type="text"]::placeholder { color: #aaa; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>👑 Admin Dashboard - {{ username }}</h1>
+            <a href="/logout/" class="btn">🚪 Logout</a>
+        </div>
+
+        <div class="tabs">
+            <a href="?page=upload" class="btn {% if page == 'upload' %}active{% endif %}">📤 Upload Songs</a>
+            <a href="?page=songs" class="btn {% if page == 'songs' %}active{% endif %}">🎵 Songs List</a>
+        </div>
+
+        {% if page == 'upload' %}
+        <div class="upload-form">
+            <h3>📤 Upload New Song</h3>
+            <form method="post" enctype="multipart/form-data" action="/upload_song/">
+                {% csrf_token %}
+                <div style="display: flex; gap: 20px; flex-wrap: wrap;">
+                    <!-- ✅ SONG NAME FIELD ADDED -->
+                    <input type="text" name="song_name" placeholder="🎵 Enter Song Title (e.g. 'Shape of You')" required>
+                    <input type="file" name="original_file" accept=".mp3" required>
+                    <input type="file" name="accompaniment_file" accept=".mp3" required>
+                    <input type="file" name="lyrics_image" accept="image/*">
+                </div>
+                <button type="submit" class="btn" style="margin-top: 15px; width: 100%;">🚀 Upload Song</button>
+            </form>
+        </div>
+        {% endif %}
+
+        {% if page == 'songs' %}
+        <div class="song-list">
+            <h3>🎵 All Songs ({{ songs.count }})</h3>
+            
+            <!-- ✅ PERFECT CSRF TOKEN FOR SHARE BUTTONS -->
+            <div style="display: none;">
+                {% csrf_token %}
+            </div>
+            
+            {% for song in songs %}
+            <div class="song-item">
+                <div>
+                    <strong>{{ song.name }}</strong><br>
+                    <small>Uploaded: {{ song.uploaded_by }} | {{ song.created_at|date:"M d, Y" }}</small>
+                </div>
+                <div style="text-align: right;">
+                    <a href="/karaoke/{{ song.id }}/" class="btn">▶️ Play</a>
+                    <button class="btn share-btn {% if song.is_shared %}shared{% endif %}" 
+                            onclick="toggleShare({{ song.id }}, this)">
+                        {% if song.is_shared %}✅ Shared{% else %}🔒 Private{% endif %}
+                    </button>
+                    {% if song.is_shared %}
+                    <div class="share-url">
+                        {{ request.scheme }}://{{ request.get_host }}/karaoke/{{ song.id }}/
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+    </div>
+
+    <script>
+    function toggleShare(songId, btn) {
+        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]');
+        if (!csrfToken) {
+            alert('Reload page!');
+            return;
+        }
+        
+        btn.disabled = true;
+        btn.textContent = '⏳...';
+        
+        fetch(`/toggle_share/${songId}/`, { 
+            method: 'POST', 
+            headers: { 
+                'X-CSRFToken': csrfToken.value,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({})
+        })
+        .then(response => response.json())
+        .then(data => {
+            console.log('✅ Share response:', data);
+            if (data.success) {
+                if (data.is_shared) {
+                    btn.textContent = '✅ Shared';
+                    btn.classList.add('shared');
+                } else {
+                    btn.textContent = '🔒 Private';
+                    btn.classList.remove('shared');
+                }
+            } else {
+                alert('Error: ' + data.error);
+            }
+        })
+        .catch(error => {
+            console.error('❌ Error:', error);
+            alert('Network error!');
+        })
+        .finally(() => {
+            btn.disabled = false;
+        });
+    }
+    </script>
+</body>
+</html>

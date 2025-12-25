@@ -1,0 +1,395 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<title>🎤 Karaoke Reels</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { 
+    background: #000; 
+    font-family: 'Poppins', sans-serif; 
+    height: 100vh; 
+    width: 100vw; 
+    overflow: hidden; 
+}
+.reel-container, .final-reel-container { 
+    width: 100%; 
+    height: 100%; 
+    position: absolute; 
+    background: #111; 
+    overflow: hidden; 
+}
+#status { 
+    position: absolute; 
+    top: 20px; 
+    width: 100%; 
+    text-align: center; 
+    font-size: 14px; 
+    color: #ccc; 
+    z-index: 20; 
+    text-shadow: 1px 1px 6px rgba(0,0,0,0.9); 
+}
+.reel-bg { 
+    position: absolute; 
+    top: 0; 
+    left: 0; 
+    width: 100%; 
+    height: 85vh; 
+    object-fit: contain; 
+    object-position: top; 
+}
+#logoImg { 
+    position:absolute; 
+    top:20px; 
+    left:20px; 
+    width:60px; 
+    z-index:50; 
+    opacity:0.6; 
+}
+.user-info { 
+    position: absolute; 
+    top: 20px; 
+    right: 20px; 
+    color: #ccc; 
+    font-size: 12px; 
+    z-index: 50; 
+}
+.logout-btn { 
+    background: linear-gradient(135deg, #ff4444, #ff6666); 
+    padding: 4px 12px; 
+    font-size: 11px; 
+    border-radius: 15px;
+    border: none;
+    cursor: pointer;
+    margin-left: 10px;
+}
+.controls { 
+    position: absolute; 
+    bottom: 20%; 
+    width: 100%; 
+    text-align: center; 
+    z-index: 30; 
+}
+button { 
+    background: linear-gradient(135deg, #ff0066, #ff66cc); 
+    border: none; 
+    color: white; 
+    padding: 12px 24px; 
+    border-radius: 25px; 
+    font-size: 14px; 
+    margin: 5px; 
+    box-shadow: 0px 4px 15px rgba(255,0,128,0.4); 
+    cursor: pointer; 
+}
+button:active { transform: scale(0.95); }
+.final-output { 
+    position: fixed; 
+    width: 100vw; 
+    height: 100vh; 
+    top: 0; 
+    left: 0; 
+    background: rgba(0,0,0,0.95); 
+    display: none; 
+    justify-content: center; 
+    align-items: center; 
+    z-index: 999; 
+}
+.final-reel-container {
+    position: relative;
+    width: 100%;
+    height: 100%;
+}
+.final-controls {
+    position: absolute;
+    bottom: 20%;
+    width: 100%;
+    text-align: center;
+}
+#finalLyrics {
+    position: absolute;
+    bottom: 40%;
+    width: 100%;
+    text-align: center;
+    font-size: 2.5vw;
+    font-weight: bold;
+    color: white;
+    text-shadow: 2px 2px 10px black;
+    z-index: 10;
+}
+.download-link {
+    display: inline-block;
+    text-decoration: none;
+}
+</style>
+</head>
+<body>
+<div class="reel-container" id="reelContainer">
+{% if song.lyrics_image %}
+<img class="reel-bg" id="mainBg" src="{{ song.lyrics_image.url }}">
+{% else %}
+<img class="reel-bg" id="mainBg" src="/static/default_lyrics_bg.jpg">
+{% endif %}
+
+<img id="logoImg" src="/media/logo/branks3_logo.png" onerror="this.style.display='none'">
+
+<div class="user-info">
+<span>{{ username }} ({{ role|upper }})</span>
+<button class="logout-btn" onclick="window.location.href='/logout/'">🚪 Logout</button>
+</div>
+
+<div id="status">Ready 🎤</div>
+
+<audio id="originalAudio" src="{{ song.original_file.url }}"></audio>
+<audio id="accompaniment" src="{{ song.accompaniment_file.url }}"></audio>
+
+<div class="controls">
+<button id="playBtn">▶️ Play</button>
+<button id="recordBtn">🎙️ Record</button>
+<button id="stopBtn" style="display:none;">⏹️ Stop</button>
+</div>
+</div>
+
+<div class="final-output" id="finalOutputDiv">
+<div class="final-reel-container">
+<img class="reel-bg" id="finalBg">
+<div id="status"></div>
+<div id="finalLyrics"></div>
+<div class="final-controls">
+<button id="playRecordingBtn">▶️ Play Recording</button>
+<a id="downloadRecordingBtn" class="download-link" href="#" download>
+<button>⬇️ Download</button>
+</a>
+<button id="newRecordingBtn">🔄 New</button>
+</div>
+</div>
+</div>
+
+<canvas id="videoCanvas" width="1920" height="1080" style="display:none;"></canvas>
+
+<script>
+let mediaRecorder, recordedChunks = [], playRecordingAudio = null, isPlayingRecording = false;
+let currentSongId = {{ song.id }};
+let audioContext, micSource, accSource, canvasRafId = null;
+let recordingVideoBlob = null;
+
+const playBtn = document.getElementById("playBtn");
+const recordBtn = document.getElementById("recordBtn");
+const stopBtn = document.getElementById("stopBtn");
+const status = document.getElementById("status");
+const originalAudio = document.getElementById("originalAudio");
+const accompanimentAudio = document.getElementById("accompaniment");
+const finalDiv = document.getElementById("finalOutputDiv");
+const mainBg = document.getElementById("mainBg");
+const finalBg = document.getElementById("finalBg");
+const finalLyrics = document.getElementById("finalLyrics");
+const playRecordingBtn = document.getElementById("playRecordingBtn");
+const downloadRecordingBtn = document.getElementById("downloadRecordingBtn");
+const newRecordingBtn = document.getElementById("newRecordingBtn");
+const canvas = document.getElementById("videoCanvas");
+const ctx = canvas.getContext("2d");
+
+const logoImg = new Image();
+logoImg.src = document.getElementById("logoImg").src || '/media/logo/branks3_logo.png';
+
+async function ensureAudioContext() {
+    if (!audioContext) {
+        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        if (audioContext.state === "suspended") await audioContext.resume();
+    }
+}
+
+async function safePlay(audio) {
+    try {
+        await ensureAudioContext();
+        await audio.play();
+    } catch(e) {
+        console.log("Autoplay blocked:", e);
+    }
+}
+
+function drawCanvas() {
+    ctx.fillStyle = "#000";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+    const canvasW = canvas.width;
+    const canvasH = canvas.height * 0.85;
+    const imgRatio = mainBg.naturalWidth / mainBg.naturalHeight;
+    const canvasRatio = canvasW / canvasH;
+    
+    let drawW, drawH;
+    if (imgRatio > canvasRatio) {
+        drawW = canvasW;
+        drawH = canvasW / imgRatio;
+    } else {
+        drawH = canvasH;
+        drawW = canvasH * imgRatio;
+    }
+    
+    const x = (canvasW - drawW) / 2;
+    const y = 0;
+    
+    ctx.drawImage(mainBg, x, y, drawW, drawH);
+    ctx.globalAlpha = 0.6;
+    ctx.drawImage(logoImg, 20, 20, 60, 60);
+    ctx.globalAlpha = 1;
+    
+    canvasRafId = requestAnimationFrame(drawCanvas);
+}
+
+playBtn.onclick = async () => {
+    if (originalAudio.paused) {
+        originalAudio.currentTime = 0;
+        accompanimentAudio.currentTime = 0;
+        await Promise.all([safePlay(originalAudio), safePlay(accompanimentAudio)]);
+        playBtn.innerText = "⏸️ Pause";
+        status.innerText = "🎵 Playing song...";
+    } else {
+        originalAudio.pause();
+        accompanimentAudio.pause();
+        playBtn.innerText = "▶️ Play";
+        status.innerText = "⏸️ Paused";
+    }
+};
+
+recordBtn.onclick = async () => {
+    status.innerText = "🎙️ Initializing...";
+    recordedChunks = [];
+    
+    try {
+        await ensureAudioContext();
+        
+        const micStream = await navigator.mediaDevices.getUserMedia({ 
+            audio: {
+                sampleRate: 44100,
+                channelCount: 2,
+                echoCancellation: true,
+                noiseSuppression: true
+            }
+        });
+        
+        micSource = audioContext.createMediaStreamSource(micStream);
+        
+        // Load accompaniment for mixing
+        const accRes = await fetch(accompanimentAudio.src);
+        const accBuf = await accRes.arrayBuffer();
+        const accDecoded = await audioContext.decodeAudioData(accBuf);
+        accSource = audioContext.createBufferSource();
+        accSource.buffer = accDecoded;
+        
+        const destination = audioContext.createMediaStreamDestination();
+        micSource.connect(destination);
+        accSource.connect(destination);
+        
+        // Start video canvas for background
+        canvas.width = 1280;
+        canvas.height = 720;
+        finalBg.src = mainBg.src;
+        drawCanvas();
+        
+        // Create mixed stream with video
+        const videoStream = canvas.captureStream(30);
+        const audioStream = destination.stream;
+        const mixedStream = new MediaStream([
+            ...videoStream.getVideoTracks(),
+            ...audioStream.getAudioTracks()
+        ]);
+        
+        mediaRecorder = new MediaRecorder(mixedStream, { mimeType: 'video/webm;codecs=vp9,opus' });
+        
+        mediaRecorder.ondataavailable = (e) => {
+            if (e.data.size > 0) recordedChunks.push(e.data);
+        };
+        
+        mediaRecorder.onstop = () => {
+            cancelAnimationFrame(canvasRafId);
+            
+            recordingVideoBlob = new Blob(recordedChunks, { type: 'video/webm' });
+            const videoUrl = URL.createObjectURL(recordingVideoBlob);
+            
+            finalDiv.style.display = "flex";
+            downloadRecordingBtn.href = videoUrl;
+            downloadRecordingBtn.download = `karaoke_${currentSongId}_${Date.now()}.webm`;
+            
+            // Video player setup
+            playRecordingBtn.onclick = () => {
+                if (!isPlayingRecording) {
+                    const video = document.createElement('video');
+                    video.src = videoUrl;
+                    video.style.position = 'absolute';
+                    video.style.width = '100%';
+                    video.style.height = '100%';
+                    video.style.objectFit = 'contain';
+                    video.style.top = '0';
+                    video.style.left = '0';
+                    document.querySelector('.final-reel-container').appendChild(video);
+                    video.play();
+                    isPlayingRecording = true;
+                    playRecordingBtn.innerText = "⏹️ Stop";
+                    
+                    video.onended = () => {
+                        isPlayingRecording = false;
+                        playRecordingBtn.innerText = "▶️ Play Recording";
+                        video.remove();
+                    };
+                } else {
+                    const video = document.querySelector('.final-reel-container video');
+                    if (video) video.pause();
+                    isPlayingRecording = false;
+                    playRecordingBtn.innerText = "▶️ Play Recording";
+                }
+            };
+            
+            status.innerText = "✅ Recording complete! 🎤";
+            micStream.getTracks().forEach(track => track.stop());
+        };
+        
+        mediaRecorder.start(100);
+        accSource.start();
+        
+        originalAudio.currentTime = 0;
+        accompanimentAudio.currentTime = 0;
+        await Promise.all([safePlay(originalAudio), safePlay(accompanimentAudio)]);
+        
+        playBtn.style.display = "none";
+        recordBtn.style.display = "none";
+        stopBtn.style.display = "inline-block";
+        status.innerText = "🎙️ Recording... 🎵";
+        
+    } catch (err) {
+        status.innerText = "❌ Error: " + err.message;
+        console.error("Recording error:", err);
+    }
+};
+
+stopBtn.onclick = () => {
+    if (mediaRecorder && mediaRecorder.state === 'recording') {
+        mediaRecorder.stop();
+    }
+    if (accSource) accSource.stop();
+    originalAudio.pause();
+    accompanimentAudio.pause();
+    status.innerText = "⏹️ Processing...";
+    stopBtn.style.display = "none";
+};
+
+newRecordingBtn.onclick = () => {
+    finalDiv.style.display = "none";
+    if (playRecordingAudio) playRecordingAudio.pause();
+    recordedChunks = [];
+    isPlayingRecording = false;
+    playRecordingBtn.innerText = "▶️ Play Recording";
+    
+    if (audioContext) {
+        micSource?.disconnect();
+        accSource?.stop();
+    }
+    
+    playBtn.style.display = "inline-block";
+    recordBtn.style.display = "inline-block";
+    stopBtn.style.display = "none";
+    playBtn.innerText = "▶️ Play";
+    status.innerText = "Ready 🎤";
+};
+</script>
+</body>
+</html>
